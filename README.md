@@ -9,3 +9,6 @@ The purpose of those reports was to analyze options that appeared to be outliers
 This project was halted because of a change to barchart's option data API, requiring a subscription of sorts. My future plans are to explore other sources of data such as robinhoods unofficial REST API. 
 
 **important note**: the black scholes equation is only effective for European options because they cannot be excercised before expiration. Pricing American stock options is more effective with the binomial options model
+
+### Resources
+[Option Pricing: A simplified Approach (1979)](https://citeseerx.ist.psu.edu/viewdoc/citations;jsessionid=2BD640587BAF8D2256C2E22548DEE13D?doi=10.1.1.379.7582)
