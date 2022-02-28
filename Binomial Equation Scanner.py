@@ -17,10 +17,10 @@ import getStockList
 import ssl
 from td.client import TDClient
 
-
 #Prevent TD Ameritrade API from throwing SSLError
 ssl._create_default_https_context = ssl._create_unverified_context
-#Get TD Ameritrade API key
+
+#Get TD Ameritrade API key. creds.txt is a text file with API key as the only text
 API_KEY = open('creds.txt', 'r').read()
 # Create a new session, credentials path is required.
 TDSession = TDClient(
