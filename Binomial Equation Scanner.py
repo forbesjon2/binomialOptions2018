@@ -1,5 +1,7 @@
 """---imports---"""
 import re
+from unittest import result
+from unittest.mock import call
 import urllib.request
 import urllib.parse
 import numpy as np
@@ -11,10 +13,22 @@ import datetime
 from datetime import date
 from datetime import timedelta
 import sys
-
 import getStockList
+import ssl
+from td.client import TDClient
 
-#to save as an exe, type pyinstaller.exe --onefile (--windowed) <filename>.py
+
+#Prevent TD Ameritrade API from throwing SSLError
+ssl._create_default_https_context = ssl._create_unverified_context
+#Get TD Ameritrade API key
+API_KEY = open('creds.txt', 'r').read()
+# Create a new session, credentials path is required.
+TDSession = TDClient(
+    client_id=API_KEY,
+    redirect_uri='https://127.0.0.1',
+    credentials_path='/Users/forbesjon2/Desktop/binomialOptions2018/td_state.json'
+)
+TDSession.login()
 
 
 """Miscellaneous math object calling used for yahoo finance & equation"""
@@ -24,30 +38,30 @@ e = math.exp
 """http://bradley.bradley.edu/~arr/bsm/pg04.html"""
 
 """---definition section, adjust these values to change small aspects---"""
-Lookback_Length_max = 65               #maximum number of days until expiration
-Lookback_Length_min = 10                #minimum number of days until expiration
+lookback_len_max = 65               #maximum number of days until expiration
+lookback_len_min = 10                #minimum number of days until expiration
 
 #minimum total volume, filtered before anything is calculated
-Minimum_Volume = 1
-Minimum_Open_interest = 10
-minimum_option_price = 0.10
-minimum_chain_length = 3       #define minimum chain length for calculating the mean of the option valuation calculations
-minimum_spread = 10     #define minimum spread (in percent) for the chain to be included in results
+min_volume = 1
+min_open_interest = 10
+min_option_price = 0.10
+min_chain_length = 3       #define minimum chain length for calculating the mean of the option valuation calculations
+min_spread = 10     #define minimum spread (in percent) for the chain to be included in results
 
 #number of branches to be run through the binomial equation
-global number_of_branches_low
-global number_of_branches_high
-number_of_branches_low = 10
-number_of_branches_high = 150
+global num_branches_low
+global num_branches_high
+num_branches_low = 10
+num_branches_high = 150
 
-Curnt_Interest_Rate = 1.055          #Current interest rate (keep this updated), write in format 1.XX
-risk_free_interest_rate = Curnt_Interest_Rate - 1
+INTEREST_RATE = 1.055          #Current interest rate (keep this updated), write in format 1.XX
+risk_free_interest_rate = INTEREST_RATE - 1
 iterdon = {}
 """https://www.treasury.gov/resource-center/data-chart-center/interest-rates/Pages/TextView.aspx?data=billrates"""
 
 # thinlist thins the results and prints only the results that are optimized for the sort by premium calculation in the binomial equation filter results. Set to false to get generic results 
 thinlist = True
-
+debug = True
 
 
 """some date stuff.. ignore this"""
@@ -60,6 +74,9 @@ comparED = date(current_year, current_month, current_day)
 todays_date_man = datetime.date.today()
 day_of_week = date_object.strftime('%A')
 
+# Lookback length as a date string (yyyy-MM-DD format)
+lb_len_max_date = (datetime.datetime.now() + datetime.timedelta(days=lookback_len_max)).strftime('%Y-%m-%d')
+lb_len_min_date = (datetime.datetime.now() + datetime.timedelta(days=lookback_len_min)).strftime('%Y-%m-%d')
 
 
 #splits the full stock list into 4 lists, runs every monday - thursday
@@ -68,7 +85,7 @@ day_of_week = "Thursday"
 FSL = getStockList.get_stock_list.stock_list_calc(day_of_week)
 Full_Stock_List = FSL[0]
 #FIXME
-Full_Stock_List = ["O"]
+# Full_Stock_List = ["RAVN"]
 writeMode = FSL[1]
 
 if writeMode == "na":
@@ -78,11 +95,7 @@ else:
 #test1 dow = sunday, stock = aa
 
 
-
 """---class and def section---"""
-
-
-
 class BinomialEquation():
     def __init__(self):
         pass
@@ -94,11 +107,11 @@ class BinomialEquation():
         global calc_dict
         calc_dict = {}
         #no affect whether calls vs puts
-        ttheq = BinomialEquation.theq(cntr, volatility, days_to_expiration, dividend)
+        ttheq = BinomialEquation.theq(self, cntr, volatility, days_to_expiration, dividend)
+        print_debug("ttheq: " + str(ttheq))
         theqnum, eulers_number_binomial, dte_percent_of_year, UMAD, DMAD = ttheq[0], ttheq[1], ttheq[2], ttheq[3], ttheq[4]
-
-        iterdon = BinomialEquation.itertree(ccounter,UMAD, DMAD, current_price)
-        BinomialEquation.intrinsic_value_calculation(theqnum, eulers_number_binomial, iterdon, strike_price, current_price, ccounter, option_type)
+        iterdon = BinomialEquation.itertree(self, ccounter, UMAD, DMAD, current_price)
+        BinomialEquation.intrinsic_value_calculation(self, theqnum, eulers_number_binomial, iterdon, strike_price, current_price, ccounter, option_type)
         beresult = calc_dict[1]
         return beresult
 
@@ -106,25 +119,25 @@ class BinomialEquation():
         thedict = {}
         cntr = ccounter
         for numberr in range (0, ccounter +1):
-                thellist = []
-                cntr -= 1
-                counter2 = cntr + 1
-                for num in range(0, counter2 + 1):
-                        up = counter2 - num
-                        down = num
-                        upcalc =  ((UMAD**up) *(DMAD**down)) *(current_price)
-                        thellist.append(upcalc)
-                        num += 1
-                thedict[len(thellist)] = thellist
+            thellist = []
+            cntr -= 1
+            counter2 = cntr + 1
+            for num in range(0, counter2 + 1):
+                up = counter2 - num
+                down = num
+                upcalc =  ((UMAD**up) *(DMAD**down)) *(current_price)
+                thellist.append(upcalc)
+                num += 1
+            thedict[len(thellist)] = thellist
         return thedict
 
-    def theq(self, volatility, days_to_expiration, dividend):   #input number of branches/volatility/dte, output theqnum/eulers num binomial/dte_percent_of_year/UMAD/DMAD
+    def theq(self, cntr, volatility, days_to_expiration, dividend):   #input number of branches/volatility/dte, output theqnum/eulers num binomial/dte_percent_of_year/UMAD/DMAD
         dte_percent_of_year = days_to_expiration / 365
-        dte_adjusted_to_branch = dte_percent_of_year / self
+        dte_adjusted_to_branch = dte_percent_of_year / cntr
         dte_adjusted_to_day = dte_percent_of_year / days_to_expiration
         #takes into account dividends as percentage per branch & reduces the gain while increasing the loss respectively on UMAD & DMAD
         if dividend > 0:
-            dividend_multiplier = (dividend * dte_percent_of_year) / (self)
+            dividend_multiplier = (dividend * dte_percent_of_year) / cntr
         else:
             dividend_multiplier = 0
         UMAD = (e(volatility * sqrt(dte_adjusted_to_branch))) - dividend_multiplier #upawrd movement as fraction, subtract the dividend from upward move [results in smaller upward move and larger downward move]
@@ -137,17 +150,17 @@ class BinomialEquation():
         return theqnum, eulers_number_binomial, dte_percent_of_year, UMAD, DMAD
 
 
-    def IVC(self, strike_price, option_type): #where self = iterdon, and the current stock price is imported too. outputs 1 of 2 fundamental values that are to be compared
+    def IVC(self, iterdon, strike_price, option_type): #where the current stock price is imported. outputs 1 of 2 fundamental values that are to be compared
         """this is the ez calc that is called in intrinsic_value_calculation_call"""
         thisisnotanexit = 0
         strike_price = float(strike_price)
         callcalconedict = {}
         #this is the first part
-        for onee in self:
+        for onee in iterdon:
             callcalconelist = []
-            #onee returns the keys, self[onee] returns the values
-            for indiv in self[onee]:
-                if option_type == 'Call':
+            #onee returns the keys, iterdon[onee] returns the values
+            for indiv in iterdon[onee]:
+                if option_type == 'CALL':
                     onme = indiv - strike_price
                 else:
                     onme = strike_price - indiv
@@ -160,10 +173,9 @@ class BinomialEquation():
             thisisnotanexit += 1
         return callcalconedict
 
-    def intrinsic_value_calculation(self, eulers_number_binomial, iterdon, strike_price, current_price, ccounter, option_type):   #self = theq
+    def intrinsic_value_calculation(self, theqnum, eulers_number_binomial, iterdon, strike_price, current_price, ccounter, option_type):
         idw = len(iterdon)
-        theqnum = self
-        first_calculation = BinomialEquation.IVC(iterdon, strike_price, option_type)
+        first_calculation = BinomialEquation.IVC(self, iterdon, strike_price, option_type)
         first_calc_length = (len(first_calculation)) - 1   #-1 because there are n -1 calculated branches total
         while first_calc_length != 0: #prepares a n + 1 branch for binomial
             calctwolist = first_calculation[first_calc_length + 1] #-1 every iteration, begins at end
@@ -199,178 +211,49 @@ class BinomialEquation():
             first_calc_length -= 1
         return calc_dict
 
+#Returns list of filtered options, underlying stock info
+def get_option_data(self):
+    opt_chain = {
+        'symbol': self,
+        'contractType': 'ALL',
+        'fromDate': lb_len_min_date,
+        'toDate': lb_len_max_date,
+        'includeQuotes': True,
+        'range': 'ALL',
+        'strategy': 'SINGLE'
+    }
+    option_chain = TDSession.get_options_chain(option_chain=opt_chain)
+    if option_chain["status"] != "SUCCESS":
+        print_debug("get_option_data failed for " + self)
+        return None
+    option_data = []
+    for option_type in ["callExpDateMap", "putExpDateMap"]:
+        for option_date in option_chain[option_type]:
+            for option_strike in option_chain[option_type][option_date]:
+                if filter_option(option_chain[option_type][option_date][option_strike][0]):
+                    option_chain[option_type][option_date][option_strike][0]["option_date"] = option_date
+                    option_data.append(option_chain[option_type][option_date][option_strike][0])
+    return option_data, option_chain["underlying"]
 
-class Filter:
-        def __init__(self):
-                pass
-#in separate def to increase speed, used only when called
-        def bidprice(self):
-                bidprice = (re.findall('bidPrice''........', str(self)))
-                bidpricee = re.findall('\d?''\d''.''\d''\d?', str(bidprice))
-                try:
-                        bidpricz = bidpricee[0]
-                except:
-                        bidpricz = bidpricee
-                return bidpricz
-        def askprice(self):
-                askprice = re.findall('askPrice''........', str(self))
-                askpricee = re.findall('\d?''\d''.''\d''\d?', str(askprice))
-                try:
-                        askrpicz = askpricee[0]
-                except:
-                        askrpicz = askpricee
-                return askrpicz
-        def midpoint(self):
-                midpoint = re.findall('midpoint''..........', str(self))
-                midpointt = re.findall('\d?''\d?''\d?''\d''.''\d''\d?', str(midpoint))
-                try:
-                        middupont = midpointt[0]
-                except:
-                        middupont = midpointt
-                return middupont
-        def strike(self):
-                strike = re.findall('strikePrice''..........', str(self))
-                strikee = re.findall('\d?''\d?''\d?''\d''.''\d''\d?', str(strike))
-                try:
-                        strikez = strikee[0]
-                except:
-                        strikez = strikee
-                return strikez
-        def volume(self):
-                volume = re.findall('volume''.....', str(self))
-                volumee = re.findall('\d?''\d?''\d?''\d?''\d', str(volume))
-                try:
-                        volumeo = volumee[0]
-                except:
-                        volumeo = volumee
-                return volumeo
-        #returned as "NA", need to get more familiar with the parmeters before passing thru 2nd line of filtering
-        def lastprice(self):
-                lastprice = re.findall('lastPrice''..........', str(self))
-                lstprce = re.findall('\d?''\d?''\d?''\d''.''\d''\d?', str(lastprice))
-                try:
-                        lstprcz = lstprce[0]
-                except:
-                        lstprcz = lstprce
-                return lstprcz
-        def pcentfl(self):
-                pcentfl = re.findall('percentFromLast''.........', str(self))
-                return pcentfl
-        def openinterest(self):
-                openinterest = re.findall('openInterest''..........', str(self))
-                openinterestt = re.findall('\d?''\d?''\d?''\d?''\d?''\d', str(openinterest))
-                try:
-                        oldschool = openinterestt[0]
-                except:
-                        oldschool = openinterestt
-                return oldschool
-        def optiontype(self):
-                optiontype = re.findall('optionType''.......', str(self))
-                optiontypee = re.findall('Call', str(optiontype))
-                optiontyper = re.findall('Put', str(optiontype))
-                if len(optiontypee) != 0:
-                        try:
-                                callf = optiontypee[0]
-                        except:
-                                callf = optiontypee
-                        return callf
-                else:
-                        try:
-                                putf = optiontyper[0]
-                        except:
-                                putf = optiontyper
-                        return putf
-        def daystoexpiration(self):
-                daystoexpiration = re.findall('daysToExpiration''.......', str(self))
-                daystoexpirationn = re.findall('\d?''\d?''\d', str(daystoexpiration))
-                try:
-                        daystoexpiratioz = daystoexpirationn[0]
-                except:
-                        daystoexpiratioz = daystoexpirationn
-                return daystoexpiratioz
+def filter_option(option_dict):
+    if option_dict["ask"] == 0 or option_dict["bid"] == 0:
+        return False
+    res = option_dict["totalVolume"] < min_volume
+    res |= option_dict["openInterest"] < min_open_interest
+    res |= option_dict["last"] < min_option_price
+    res |= (round(float(option_dict["bid"] / option_dict["ask"]), 4)) * 100 < min_spread
+    return not res
 
-
-#list of def's not inside classes
-def url_date(self):
-    date_values = {}
-    urldatfilterlist = ""
-    urll = 'https://core-api.barchart.com/v1/options/chain?'
-    date_values['symbol'] = self
-    date_values['fields'] = 'expirationDate'
-    date_values['groupBy'] = 'optionType'
-    date_values['expirationDate'] = 'all'
-    dataa = urllib.parse.urlencode(date_values)
-    data_stringg = str(dataa)
-    ulrr = [urll, data_stringg]
-    nothngg = ""
-    nothngg = nothngg.join(ulrr)
-    nothngg_string = str(nothngg)
-    urldatfilterlist = nothngg_string
-    return urldatfilterlist
-
-
-def ccontent(self):
-    wwho = []
-    headers = {}
-    
-    headers['User-Agent'] = 'Mozilla/5.0 (X11 Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17'
-    respz = urllib.request.Request(self, headers = headers)
-    resp = urllib.request.urlopen(respz)
-    content = resp.read()
-    #separate by strike price
-    paragraphs = re.findall(r'{(.*?)}', str(content))
-    
-    for paragraphh in paragraphs:
-        separte = re.findall(r'raw(.*?)expirationDate', str(paragraphh))
-    #attaches each individual iteration to the wwho list for future reference
-        wwho.append(separte)
-    return wwho
-
-def thisistheurlass(self): #filter through the url, call url def
-    x = url_date(self)
-    
-    pesr = urllib.request.urlopen(x)
-    dat_content = pesr.read()
-    date_values = re.findall(r'\d''\d''\d''\d''.''\d''\d''.''\d''\d', str(dat_content))
-    #get the last x dates in list, defined in first few lines
-    values = {}
-    link_list = []
-    url = 'https://core-api.barchart.com/v1/options/chain?'
-    #then get the actual URL that should be requested, including dynamic dates
-
-    for indivv in date_values:
-        year = int(indivv[0:4])
-        month = int(indivv[5:7])
-        day = int(indivv[8:10])
-        expiration_datezz = date(year, month, day)
-        ttime_boi = expiration_datezz - comparED
-        lookback_compare = ttime_boi.days
-        if lookback_compare <= Lookback_Length_max and lookback_compare >= Lookback_Length_min:
-            values['symbol'] = self
-            values['fields'] = 'strikePrice,lastPrice,percentFromLast,bidPrice,midpoint,askPrice,priceChange,percentChange,volatility,volume,openInterest,optionType,daysToExpiration,expirationDate,symbolCode,symbolType'
-            values['groupBy'] = 'optionType'
-            values['expirationDate'] = indivv
-            values['raw'] = '1'
-            values['meta'] = 'field.shortName,field.type,field.description'
-            data = urllib.parse.urlencode(values)
-            data_string = str(data)
-            ulr = [url, data_string]
-            nothng = ""
-            nothng = nothng.join(ulr)
-            nothng_string = str(nothng)
-            link_list.append(nothng_string)
-        else:
-            pass
-    return link_list
-
-def adj_close_values_actually_volatility(self):   #enter individual stock names in self
+def get_volatility(self):   #enter individual stock names in self
     llist = []
     orlist2 = []
     innb = 2
     percent_return_list = []
-    getdaturl = "https://finance.yahoo.com/quote/" + self + "/history"
-    
-    open_the_adjvalue = urllib.request.urlopen(getdaturl)
+    url = "https://finance.yahoo.com/quote/" + self + "/history"
+    headers = {}
+    headers['User-Agent'] = 'Mozilla/5.0 (X11 Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17'
+    pre_req = urllib.request.Request(url, headers = headers)
+    open_the_adjvalue = urllib.request.urlopen(pre_req)
     adjvalue_content = open_the_adjvalue.read()
     what = re.findall(r'adjclose":(.*?)}', str(adjvalue_content))
     otherwhat = re.findall(r'"low":(.*?),"', str(adjvalue_content))
@@ -387,101 +270,44 @@ def adj_close_values_actually_volatility(self):   #enter individual stock names 
             pass
     #this prints the current price of the stock, as of the most recent adjusted close price
     while innb < 300:
-            try:
-                    denominator = float(llist[innb-2])
-                    numerator = float(llist[innb-1])
-                    percent_returnn = ((numerator/denominator) - 1)
-                    returnss = round(percent_returnn, 8) #rounds to 8 decimal places
-                    percent_return_list.append(returnss)
-            except:
-                    pass
-            innb +=1
+        try:
+            denominator = float(llist[innb-2])
+            numerator = float(llist[innb-1])
+            percent_returnn = ((numerator/denominator) - 1)
+            returnss = round(percent_returnn, 8) #rounds to 8 decimal places
+            percent_return_list.append(returnss)
+        except:
+            pass
+        innb +=1
     low52 = round(float(min(orlist2)), 3)
     volatilimmmty = st.stdev(percent_return_list)
     volatility = sqrt(252)*volatilimmmty
     illist = llist[0]
     return volatility, illist, low52
 
-def oorganize(self):
-        pwkr = thisistheurlass(self)
-        raw_llist = []
-        #gives a list of all the (to be used) url's all with dynamic date values
-        for inlink in pwkr:
-                uui = ccontent(inlink)
-                uui            #runs uui
-        #opens and parses the content from the URL list called from the previous statment. Gets RAW values
-                for mink in uui:
-                        indivVol = Filter.volume(mink)
-                        indivOpenInterest = Filter.openinterest(mink)
-                        #indivOptionPrice = Filter.lastprice(mink)
-                        indivOptionPrice = Filter.midpoint(mink)
-                        try:
-                                indivOP = float(indivOptionPrice)
-                        except:
-                                indivOP = 0
-                        try:
-                                indivOI = int(indivOpenInterest)
-                        except:
-                                indivOI = 0
-                        try:
-                                IntIndiv = int(indivVol)
-                        except:
-                                IntIndiv = 0
-                        #filtering through not NoneType volume
-                        #IntIndiv = not NoneType volume, mink = RAW values
-                        if IntIndiv >= Minimum_Volume and indivOI >= Minimum_Open_interest and indivOP >= minimum_option_price:
-                                raw_llist.append(mink)
-        return raw_llist
-
-def columnsz(self):     
-        strikpricc = Filter.strike(self)
-        expiratin = Filter.daystoexpiration(self)
-        bdpricelow = Filter.bidprice(self)
-        akprice = Filter.askprice(self)
-        optiontypr = Filter.optiontype(self)
-        opnintrrst = Filter.openinterest(self)
-        mdpnt = Filter.midpoint(self)
-        try:
-                akkprice = float(str(akprice))
-                bddpricelow = float(str(bdpricelow))
-
-                spreadd = (1 - bddpricelow/akkprice) * 100
-                spreadzd = round(spreadd, 4)
-                actual_spread = str(spreadzd)
-        except:
-                actual_spread = 'na'
-        option_type = str(optiontypr)
-        strike_price = str(strikpricc)
-        open_interest = str(opnintrrst)
-        days_to_expiration = str(expiratin)
-        midpoint_option_price = str(mdpnt)
-        return option_type, strike_price, open_interest, days_to_expiration, midpoint_option_price, actual_spread
 
 def diividend(self): #input = stock ticker... output = decimal form of percentage of annual dividend
-    llist = []
-    innb = 2
-    percent_return_list = []
-    
-    getdaturl = "https://finance.yahoo.com/quote/" + self + "/key-statistics"
-    open_the_adjvalue = urllib.request.urlopen(getdaturl)
-    adjvalue_content = open_the_adjvalue.read()
+    headers = {}
+    headers['User-Agent'] = 'Mozilla/5.0 (X11 Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17'
+    request = urllib.request.Request("https://finance.yahoo.com/quote/" + self + "/key-statistics", headers = headers)
+    adjvalue_content = urllib.request.urlopen(request).read()
     what = re.findall(r'dividendYield":{"raw":(.*?),', str(adjvalue_content))
     wuwut = re.findall(r'yield":{"raw":(.*?),"', str(adjvalue_content))
     print(self)
     if len(what) > 0:
-            whatfloat = float(what[0])
-            if whatfloat > 0:
-                dividend = whatfloat
-            else:
-                dividend = 0
-    elif len(wuwut) > 0:
-            wwhatfloat = float(wuwut[0])
-            if wwhatfloat > 0:
-                    dividend = wwhatfloat
-            else:
-                    dividend = 0
-    else:
+        whatfloat = float(what[0])
+        if whatfloat > 0:
+            dividend = whatfloat
+        else:
             dividend = 0
+    elif len(wuwut) > 0:
+        wwhatfloat = float(wuwut[0])
+        if wwhatfloat > 0:
+            dividend = wwhatfloat
+        else:
+            dividend = 0
+    else:
+        dividend = 0
     return dividend
 
 def BEaverage(self):
@@ -497,13 +323,13 @@ def BEaverage(self):
             comparable_put.append(item)    
     call_length = len(comparable_call)
     put_length = len(comparable_put)
-    if call_length >= minimum_chain_length:
+    if call_length >= min_chain_length:
         for item in comparable_call:
             comparable_cv.append(item['option valuation'])
         comparable_call_valuation = np.mean(comparable_cv)
     else:
         comparable_call_valuation = 'na'
-    if put_length >= minimum_chain_length:
+    if put_length >= min_chain_length:
         for iitem in comparable_put:
             comparable_pv.append(item['option valuation'])
         comparable_put_valuation = np.mean(comparable_pv)
@@ -514,10 +340,10 @@ def BEaverage(self):
 def ExAfterEarnings(self):   #enter individual stock names in self
     earnlist = []
     from datetime import datetime
-    getdaturl = "https://finance.yahoo.com/quote/" + self
-    
-    open_the_adjvalue = urllib.request.urlopen(getdaturl)
-    adjvalue_contentt = open_the_adjvalue.read()
+    headers = {}
+    headers['User-Agent'] = 'Mozilla/5.0 (X11 Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17'
+    request = urllib.request.Request("https://finance.yahoo.com/quote/" + self, headers = headers)
+    adjvalue_contentt = urllib.request.urlopen(request).read()
     firstfiltr = re.findall(r'"EARNINGS_DATE-value"(.*?)</span></td></tr>', str(adjvalue_contentt))
     sndfiltr = re.findall('\w\w\w\s\d\d?.\s\d\d\d\d', str(firstfiltr))
     for itemm in sndfiltr:
@@ -539,86 +365,105 @@ def ExAfterEarnings(self):   #enter individual stock names in self
 
 
 def mainn(self):
-        stock = self
-        dividend = diividend(stock)
-        ccontentm = oorganize(stock)
-        get_volatility_list = adj_close_values_actually_volatility(stock)
-        annualized_volatility = get_volatility_list[0]
-        current_price = round(float(get_volatility_list[1]), 5)
-        try:
-                DaysTilEarnings = ExAfterEarnings(stock)
-                if int(DaysTilEarnings) < 0:
-                        DaysTilEarnings = 'na'
-                else:
-                        pass
-        except:
-                DaysTilEarnings = 'na'
-        current_price_as_list = []
-        current_price_as_list.append(current_price)
-        low52kid = get_volatility_list[2]
-        comparable_list = []
-        comparable_dict = {}
+    stock = self
+    dividend = diividend(stock)
+    print_debug("diividend: " + str(dividend))
+    # option_data = oorganize(stock)
+    option_data, underlying = get_option_data(self)
+    print_debug("option_data: " + str(option_data))
+    if option_data == None:
+        return []
 
-        for oonee in ccontentm:
-                results_dict = {}
-                temp_list = []
-                herer = columnsz(oonee)
-                option_typee, strike_pricee, open_interestt, days_to_expirationn, last_option_pricee, actual_spreadd = herer[0], herer[1], herer[2], int(herer[3]), herer[4], herer[5]
-                end_date = todays_date_man + timedelta(days = days_to_expirationn)
-                actual_spread = float(actual_spreadd)
-                if actual_spread >= minimum_spread:
-                        pass
-                else:
-                        results_dict['stock'] = stock
-                        results_dict['option type'] = option_typee
-                        results_dict['strike price'] = strike_pricee
-                        results_dict['expiration date'] = str(end_date)
-                        results_dict['days to expiration'] = days_to_expirationn
-                        results_dict['current price'] = current_price
-                        results_dict['dividend'] = dividend
-                        results_dict['annualized volatility'] = annualized_volatility
-                        results_dict['open interest'] = open_interestt
-                        results_dict['actual spread'] = actual_spreadd
-                        results_dict['last option price'] = last_option_pricee
-                        binomial_equation_low = BinomialEquation.mngr(current_price_as_list, number_of_branches_low, annualized_volatility, days_to_expirationn, current_price, strike_pricee, option_typee, dividend)
-                        results_dict['10 branch binomial equation'] = round(binomial_equation_low[0], 6)
-                        temp_list.append(binomial_equation_low)
-                        binomial_equation_high = BinomialEquation.mngr(current_price_as_list, number_of_branches_high, annualized_volatility, days_to_expirationn, current_price, strike_pricee, option_typee, dividend)
-                        results_dict['150 branch binomial equation'] = round(binomial_equation_high[0], 6)
-                        temp_list.append(binomial_equation_high)
-                        max_binomial_value = max(temp_list)
-                        max_binomial_value = float(max_binomial_value[0])
-                        last_option_pricee = float(last_option_pricee)
-                        option_valuation = max_binomial_value / last_option_pricee
-                        results_dict['option valuation'] = round(option_valuation, 6)
-                        results_dict['Days Til ER'] = DaysTilEarnings
-                        premium_plus = round((float(last_option_pricee) / float(strike_pricee)), 4)
-                        if float(strike_pricee) >= low52kid:
-                                results_dict['StrikeBLow'] = 'N'
-                        else:
-                                results_dict['StrikeBLow'] = 'Y'
-                        try:
-                                if int(DaysTilEarnings) > days_to_expirationn:
-                                        results_dict['ExAfterEarnings'] = 'N' #fav
-                                elif int(DaysTilEarnings) <= days_to_expirationn:
-                                        results_dict['ExAfterEarnings'] = 'Y'
-                                else:
-                                        pass
-                        except:
-                                results_dict['ExAfterEarnings'] = 'na'
-                        results_dict['premium plus'] = premium_plus
-                        
-                        comparable_list.append(results_dict)
-                        saveFile.write(str(results_dict) + '\n')
-                        saveFile.flush()
+    get_volatility_list = get_volatility(stock)
+    print_debug("volatility list: " + str(get_volatility_list))
+    annualized_volatility = get_volatility_list[0]
+    current_price = round(float(get_volatility_list[1]), 5)
+    print_debug("current_price: " + str(current_price))
+    try:
+        DaysTilEarnings = ExAfterEarnings(stock)
+        if int(DaysTilEarnings) < 0:
+            DaysTilEarnings = 'na'
+        else:
+            pass
+    except:
+        DaysTilEarnings = 'na'
+    current_price_as_list = []
+    current_price_as_list.append(current_price)
+    fifty2_week_low = underlying["fiftyTwoWeekLow"] #old get_volatility_list[2]
+    print_debug("fifty2_week_low: " + str(fifty2_week_low))
+    comparable_list = []
+    comparable_dict = {}
 
-                        # if (option_valuation < 0.1 and premium_plus > 0.02):
-                        #         comparable_list.append(results_dict)
-                        #         saveFile.write(str(results_dict) + '\n')
-                        #         saveFile.flush()
-                        # else:
-                        #         pass
-        return comparable_list
+    for option in option_data:
+        print(option["description"])
+        results_dict = {}
+        temp_list = []    
+        spread = float(round(((1 - option["ask"]/option["bid"]) * 100.0), 4))
+        end_date = todays_date_man + timedelta(days = option["daysToExpiration"])
+        if spread >= min_spread:
+                pass
+        else:
+            results_dict = {
+                "stock": stock,
+                "option type": option["putCall"],
+                "strike price": option["strikePrice"],
+                "expiration date": str(end_date),
+                "days to expiration": option["daysToExpiration"],
+                "current price": current_price,
+                "dividend": dividend,
+                "annualized volatility": annualized_volatility,
+                "open interest": option["openInterest"],
+                "actual spread": spread,
+                "last option price": str(option["mark"])
+            }
+            print_debug("results_dict: " + str(results_dict))
+            binomial_equation_low = BinomialEquation.mngr(current_price_as_list, num_branches_low, annualized_volatility, option["daysToExpiration"], current_price, option["strikePrice"], option["putCall"], dividend)
+            results_dict['10 branch binomial equation'] = round(binomial_equation_low[0], 6)
+            temp_list.append(binomial_equation_low)
+            binomial_equation_high = BinomialEquation.mngr(current_price_as_list, num_branches_high, annualized_volatility, option["daysToExpiration"], current_price, option["strikePrice"], option["putCall"], dividend)
+            results_dict['150 branch binomial equation'] = round(binomial_equation_high[0], 6)
+            temp_list.append(binomial_equation_high)
+            max_binomial_value = max(temp_list)
+            max_binomial_value = float(max_binomial_value[0])
+            option_valuation = max_binomial_value / option["mark"]
+            results_dict['option valuation'] = round(option_valuation, 6)
+            results_dict['Days Til ER'] = DaysTilEarnings
+            premium_plus = round((float(option["mark"]) / float(option["strikePrice"])), 4)
+            if float(option["strikePrice"]) >= fifty2_week_low:
+                    results_dict['StrikeBLow'] = 'N'
+            else:
+                    results_dict['StrikeBLow'] = 'Y'
+            try:
+                    if int(DaysTilEarnings) > option["daysToExpiration"]:
+                            results_dict['ExAfterEarnings'] = 'N' #fav
+                    elif int(DaysTilEarnings) <= option["daysToExpiration"]:
+                            results_dict['ExAfterEarnings'] = 'Y'
+                    else:
+                            pass
+            except:
+                    results_dict['ExAfterEarnings'] = 'na'
+            results_dict['premium plus'] = premium_plus
+            
+            comparable_list.append(results_dict)
+            saveFile.write(str(results_dict) + '\n')
+            saveFile.flush()
+
+            # if (option_valuation < 0.1 and premium_plus > 0.02):
+            #         comparable_list.append(results_dict)
+            #         saveFile.write(str(results_dict) + '\n')
+            #         saveFile.flush()
+            # else:
+            #         pass
+    return comparable_list
+
+
+def print_debug(content):
+    if debug:
+        file = open("debug.txt", 'a')
+        file.write(str(content))
+        file.write("\n")
+        file.close()
+
 
 """comparable list, not needed for now""" 
 #        be_average = BEaverage(comparable_list)
@@ -648,45 +493,36 @@ stock_error_list = []
 length_stock_list = len(Full_Stock_List)
 
 csc = 0
-
+print_debug(Full_Stock_List)
         
 for stock in Full_Stock_List:
-        
-        csc += 1
-        csc_percent = (csc / length_stock_list) * 100
-        print(csc_percent)
+    csc += 1
+    csc_percent = (csc / length_stock_list) * 100
+    print(str(csc_percent) + " % done")
 
-        testthis = csc%100
-        if (testthis == 0):
-                time.sleep(250)
-        else:
-                pass
-
-        try:
-                comparable_list = mainn(stock)
-
-        except:
-                error = sys.exc_info()
-                print("error: " + str(error))
-                stock_error_list.append(stock)
-
-stock_error_list_two = []
+    testthis = csc%100
+    if (testthis == 0):
+            time.sleep(250)
+    else:
+            pass
+    try:
+        comparable_list = mainn(stock)
+        time.sleep(2)
+        print_debug("Comparable list " + str(comparable_list))
+    except:
+        error = sys.exc_info()
+        print("error: " + str(error))
+        stock_error_list.append(stock)
 
 for stockt in stock_error_list:
-        time.sleep(3)
-        try:
-                mainn(stockt)
-        except:
-                stock_error_list_two.append(stockt)
+    time.sleep(3)
+    try:
+        mainn(stockt)
+    except:
+        pass
 
-for stockk in stock_error_list_two:
-        time.sleep(3)
-        try:
-                mainn(stockk)
-        except:
-                pass
 
-import main
+# import main
 
 saveFile.flush()
 saveFile.close()
@@ -704,11 +540,9 @@ saveFile.close()
 time.sleep(10)
 #send email of the complete results if its thursday, else just do nothing
 if day_of_week == "Thursday":
-        
         savefile2 = open('fjin.txt', 'r')
         content = savefile2.read()
         # mailContent = contentConversion(content)
-        main.mail.sendMail("forbesjon2@gmail.com", "forbesjon2@gmail.com", "scan results", content)
         savefile2.close()
 else:
         pass

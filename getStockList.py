@@ -27,7 +27,7 @@ class get_stock_list():
         elif num == 3:
             stockList= re.findall('\"([J-Q][A-Z]?[A-Z]?[A-Z]?[A-Z]?[A-Z]?)\"', str(mainList))
         elif num == 4:
-            stockList = re.findall('\"([R-Z][A-Z]?[A-Z]?[A-Z]?[A-Z]?[A-Z]?)\"', str(mainList))
+            stockList = re.findall('\"([A-Z][A-Z]?[A-Z]?[A-Z]?[A-Z]?[A-Z]?)\"', str(mainList))
         else:
             writeMode = 'na'
             pass
