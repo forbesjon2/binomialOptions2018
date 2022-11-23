@@ -14,3 +14,6 @@ TD Ameritrade API limit: 120 requests/min
 
 ### Resources
 [Option Pricing: A simplified Approach (1979)](https://citeseerx.ist.psu.edu/viewdoc/citations;jsessionid=2BD640587BAF8D2256C2E22548DEE13D?doi=10.1.1.379.7582)
+
+### Long term usage (Nov 23 2023)
+If the app keeps making 'authenticating' messages and isnt making any progress, td_state is likely expired. Delete it and re-run the program

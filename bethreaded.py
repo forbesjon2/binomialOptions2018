@@ -35,7 +35,6 @@ TDSession = TDClient(
 )
 TDSession.login()
 
-
 """Miscellaneous math object calling used for yahoo finance & equation"""
 sqrt = np.sqrt
 e = math.exp
@@ -66,7 +65,7 @@ iterdon = {}
 """https://www.treasury.gov/resource-center/data-chart-center/interest-rates/Pages/TextView.aspx?data=billrates"""
 
 debug = True
-BLOCK_LIST = ["ARNA","ATVI","CERN", "CTXS", "FHN", "ZNGA", "VG", "NUAN", "CONE", "MIME", "CNR", "MNDT", "PSTH", "JOBS", "IAU"]
+BLOCK_LIST = ["ARNA","ATVI","CERN", "CTXS", "FHN", "ZNGA", "VG", "NUAN", "CONE", "MIME", "CNR", "MNDT", "PSTH", "JOBS", "IAU", "CDK", "NLSN"]
 
 """some date stuff.. ignore this"""
 date_object = datetime.datetime.now()
@@ -474,7 +473,7 @@ if __name__ == "__main__":
     #saveFile.write('Format: [Stock, option type, strike price, days to expiration, current price, dividend, annualized volatility, open interest, actual spread (in %), last option price, 10 branch binomial equation, 150 branch binomial equation, option valuation (max of 10 or 150 branch divided by last traded option price)]\n')
     results_list = []
     stock_error_list = []
-    Full_Stock_List = split_list(Full_Stock_List, 3)
+    Full_Stock_List = split_list(Full_Stock_List, 2)
     process1 = multiprocessing.Process(target=iterate_list, args=[Full_Stock_List[0], "A", error_list])
     process2 = multiprocessing.Process(target=iterate_list, args=[Full_Stock_List[1], "B", error_list])
     process1.start()
