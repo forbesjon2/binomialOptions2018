@@ -3,16 +3,11 @@ from audioop import mul
 from distutils.log import error
 from json.tool import main
 from queue import Full
-import re
 from unittest import result
 from unittest.mock import call
-import urllib.request
-import urllib.parse
 import numpy as np
 import statistics as st
-import time
 import math
-import operator
 import datetime
 from datetime import date
 from datetime import timedelta
@@ -256,45 +251,36 @@ def filter_option(option_dict):
     return not res
 
 def get_volatility(self):   #enter individual stock names in self
-    llist = []
-    orlist2 = []
+    close_list = []
+    low_list = []
     innb = 2
     percent_return_list = []
-    url = "https://finance.yahoo.com/quote/" + self + "/history"
-    print_debug(url)
-    headers = {}
-    headers['User-Agent'] = 'Mozilla/5.0 (X11 Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17'
-    pre_req = urllib.request.Request(url, headers = headers)
-    open_the_adjvalue = urllib.request.urlopen(pre_req)
-    adjvalue_content = open_the_adjvalue.read()
-    what = re.findall(r'adjclose":(.*?)}', str(adjvalue_content))
-    otherwhat = re.findall(r'"low":(.*?),"', str(adjvalue_content))
+    price_hist = TDSession.get_price_history(symbol=self, period_type='year', frequency_type='daily')
     
-    for neo in otherwhat:
-        try:
-            orlist2.append(neo)
-        except:
-            pass
-    for oen in what:
-        try:
-            llist.append(oen)
-        except:
-            pass
+    if len(price_hist['candles']) == 0:
+        print_debug("get_price_history failed for " + self)
+        return None
+
+    for item in price_hist['candles']:
+        low_list.append(item['low'])
+        close_list.append(item['close'])
+     
     #this prints the current price of the stock, as of the most recent adjusted close price
     while innb < 300:
         try:
-            denominator = float(llist[innb-2])
-            numerator = float(llist[innb-1])
+            denominator = float(close_list[innb-2])
+            numerator = float(close_list[innb-1])
             percent_returnn = ((numerator/denominator) - 1)
             returnss = round(percent_returnn, 8) #rounds to 8 decimal places
             percent_return_list.append(returnss)
         except:
             pass
         innb +=1
-    low52 = round(float(min(orlist2)), 3)
+    
+    low52 = round(float(min(low_list)), 3)
     volatilimmmty = st.stdev(percent_return_list)
     volatility = sqrt(252)*volatilimmmty
-    illist = llist[0]
+    illist = close_list[0]
     return volatility, illist, low52
 
 
@@ -473,13 +459,13 @@ if __name__ == "__main__":
     #saveFile.write('Format: [Stock, option type, strike price, days to expiration, current price, dividend, annualized volatility, open interest, actual spread (in %), last option price, 10 branch binomial equation, 150 branch binomial equation, option valuation (max of 10 or 150 branch divided by last traded option price)]\n')
     results_list = []
     stock_error_list = []
-    Full_Stock_List = split_list(Full_Stock_List, 2)
+    Full_Stock_List = split_list(Full_Stock_List, 1)
     process1 = multiprocessing.Process(target=iterate_list, args=[Full_Stock_List[0], "A", error_list])
-    process2 = multiprocessing.Process(target=iterate_list, args=[Full_Stock_List[1], "B", error_list])
+    # process2 = multiprocessing.Process(target=iterate_list, args=[Full_Stock_List[1], "B", error_list])
     process1.start()
-    process2.start()
+    # process2.start()
     process1.join()
-    process2.join()
+    # process2.join()
     print("done: here is the error_list:")
     print(error_list)
     # import main
