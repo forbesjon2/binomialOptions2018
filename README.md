@@ -17,3 +17,22 @@ TD Ameritrade API limit: 120 requests/min
 
 ### Long term usage (Nov 23 2023)
 If the app keeps making 'authenticating' messages and isnt making any progress, td_state is likely expired. Delete it and re-run the program
+
+
+### 9/23/2023 Updating & migration to schwab
+https://developer.tdameritrade.com/content/trader-api-schwab-integration-guide-june-2023-update
+https://beta-developer.schwab.com/?cmp=em-YAS
+
+TDA still works so I wont migrate it yet
+
+Zacks custom screen must have the following format:
+Company Name,Ticker,Market Cap (mil),Optionable,Div. Yield %,Next EPS Report Date  (yyyymmdd)
+
+This is because what was originally network calls to get certain data was migrated to the information from the zacks screen. 
+![Zacks screen example](./zacks_screen_example.png)
+
+This can be achieved by adding filters (starting with market cap) in order
+
+Multithreading is limited by the API's rate limit. It used to be 3 but now 1 thread even hits the rate limit at 5% and then periodically.
+
+Eventually this will have to be moved to schwab or some other platform. I think before then ill have to find some sort of value in converting this to the new API

@@ -16,6 +16,8 @@ certificate.pem
 td_state.json
 example_tda_resp.json
 Fjin.txt
+Fjin3.txt
+old/
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

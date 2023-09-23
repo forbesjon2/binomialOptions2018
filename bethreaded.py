@@ -1,5 +1,4 @@
 """---imports---"""
-from audioop import mul
 from distutils.log import error
 from json.tool import main
 from queue import Full
@@ -12,6 +11,7 @@ import datetime
 from datetime import date
 from datetime import timedelta
 import sys
+import time
 import csv
 import ssl
 import multiprocessing
@@ -60,7 +60,7 @@ iterdon = {}
 """https://www.treasury.gov/resource-center/data-chart-center/interest-rates/Pages/TextView.aspx?data=billrates"""
 
 debug = True
-BLOCK_LIST = ["ARNA","ATVI","CERN", "CTXS", "FHN", "ZNGA", "VG", "NUAN", "CONE", "MIME", "CNR", "MNDT", "PSTH", "JOBS", "IAU", "CDK", "NLSN"]
+BLOCK_LIST = []
 
 """some date stuff.. ignore this"""
 date_object = datetime.datetime.now()
