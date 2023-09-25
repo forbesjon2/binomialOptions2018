@@ -280,8 +280,8 @@ def get_volatility(self):   #enter individual stock names in self
     low52 = round(float(min(low_list)), 3)
     volatilimmmty = st.stdev(percent_return_list)
     volatility = sqrt(252)*volatilimmmty
-    illist = close_list[0]
-    return volatility, illist, low52
+    current_price = close_list[len(close_list) - 1]
+    return volatility, current_price, low52
 
 
 def BEaverage(self):
@@ -435,6 +435,7 @@ def iterate_list(stock_list, id, error_list):
         try:
             mainn(item)
         except:
+            time.sleep(1)
             error = sys.exc_info()
             print("error: " + str(error))
             error_list.append(item)
@@ -459,8 +460,8 @@ if __name__ == "__main__":
     #saveFile.write('Format: [Stock, option type, strike price, days to expiration, current price, dividend, annualized volatility, open interest, actual spread (in %), last option price, 10 branch binomial equation, 150 branch binomial equation, option valuation (max of 10 or 150 branch divided by last traded option price)]\n')
     results_list = []
     stock_error_list = []
-    Full_Stock_List = split_list(Full_Stock_List, 1)
-    process1 = multiprocessing.Process(target=iterate_list, args=[Full_Stock_List[0], "A", error_list])
+    # Full_Stock_List = split_list(Full_Stock_List, 1)
+    process1 = multiprocessing.Process(target=iterate_list, args=[Full_Stock_List, "A", error_list])
     # process2 = multiprocessing.Process(target=iterate_list, args=[Full_Stock_List[1], "B", error_list])
     process1.start()
     # process2.start()
@@ -468,6 +469,7 @@ if __name__ == "__main__":
     # process2.join()
     print("done: here is the error_list:")
     print(error_list)
+    process1 = multiprocessing.Process(target=iterate_list, args=[error_list, "A", error_list])
     # import main
 
     saveFile.flush()
