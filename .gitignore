@@ -18,6 +18,8 @@ example_tda_resp.json
 Fjin.txt
 Fjin3.txt
 old/
+findings.txt
+
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

@@ -435,7 +435,7 @@ def iterate_list(stock_list, id, error_list):
         try:
             mainn(item)
         except:
-            time.sleep(1)
+            time.sleep(5)
             error = sys.exc_info()
             print("error: " + str(error))
             error_list.append(item)
@@ -470,6 +470,10 @@ if __name__ == "__main__":
     print("done: here is the error_list:")
     print(error_list)
     process1 = multiprocessing.Process(target=iterate_list, args=[error_list, "A", error_list])
+    print("running error_list")
+    process1.start()
+    # process2.start()
+    process1.join()
     # import main
 
     saveFile.flush()
